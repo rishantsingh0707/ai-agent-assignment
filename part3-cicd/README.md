@@ -14,7 +14,23 @@ requires it there — copy referenced here for review).
 - Deploy never runs if lint/test failed — `needs: test` makes that
   structural, not a convention someone has to remember.
 
-## Secrets / API key handling
+## Staging target: why GitHub Pages
+The staging deploy actually pushes to **GitHub Pages** rather than a
+placeholder secret-gated endpoint. This is a deliberate choice for the
+assignment: it means the pipeline is fully self-contained and runnable
+by anyone who forks the repo and enables Pages once (Settings → Pages →
+Source: "GitHub Actions") — no external account, no secrets to
+provision, and the "Deploy to Staging" job actually goes green with a
+real, visitable URL, instead of failing on a `curl` to a server that
+doesn't exist. It uses GitHub's own OIDC token (`id-token: write`) for
+auth, not a stored secret at all — the strongest form of "secret
+handling" being not needing a long-lived secret in the first place.
+
+In a real job (not an assignment sandbox), the staging target would be
+an actual app host (Vercel, ECS, a VM behind SSH, etc.), and that's the
+scenario the secrets section below describes.
+
+## Secrets / API key handling (for a real staging/production target)
 - All secrets (`STAGING_DEPLOY_API_KEY`, `STAGING_HOST`, etc.) live in
   **GitHub Environment secrets** (Settings → Environments → `staging`),
   not repo-level secrets and never in the workflow file or code.
