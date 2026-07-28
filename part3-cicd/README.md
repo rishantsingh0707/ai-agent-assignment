@@ -14,30 +14,33 @@ requires it there — copy referenced here for review).
 - Deploy never runs if lint/test failed — `needs: test` makes that
   structural, not a convention someone has to remember.
 
-## Staging target: why GitHub Pages
-The staging deploy actually pushes to **GitHub Pages** rather than a
-placeholder secret-gated endpoint. This is a deliberate choice for the
-assignment: it means the pipeline is fully self-contained and runnable
-by anyone who forks the repo and enables Pages once (Settings → Pages →
-Source: "GitHub Actions") — no external account, no secrets to
-provision, and the "Deploy to Staging" job actually goes green with a
-real, visitable URL, instead of failing on a `curl` to a server that
-doesn't exist. It uses GitHub's own OIDC token (`id-token: write`) for
-auth, not a stored secret at all — the strongest form of "secret
-handling" being not needing a long-lived secret in the first place.
+## Staging target: Vercel
+The staging deploy pushes to **Vercel** using the Vercel CLI, authenticated
+with a single `VERCEL_TOKEN` secret. This is a deliberate, pragmatic choice
+for the assignment: it's what real teams commonly use for staging/preview
+environments, it needs no pre-linked project (the CLI creates one
+automatically on first deploy), and it avoids a real issue I ran into
+while building this — GitHub Pages, on this account, kept reusing a
+stale custom-domain association from an unrelated repo even after
+clearing the custom domain field and forcing a redeploy, which meant the
+reported staging URL never actually pointed at this project's content.
+Rather than keep fighting a platform-specific caching quirk, I swapped
+the staging target — the workflow structure (test-gated deploy, smoke
+test, environment secrets) didn't need to change at all, only the
+deploy step, which is exactly the kind of decoupling a CI/CD pipeline
+should have in the first place.
 
 In a real job (not an assignment sandbox), the staging target would be
-an actual app host (Vercel, ECS, a VM behind SSH, etc.), and that's the
-scenario the secrets section below describes.
+whatever the team already runs — the secrets-handling approach below
+applies the same either way.
 
 ## Secrets / API key handling (for a real staging/production target)
-- All secrets (`STAGING_DEPLOY_API_KEY`, `STAGING_HOST`, etc.) live in
-  **GitHub Environment secrets** (Settings → Environments → `staging`),
-  not repo-level secrets and never in the workflow file or code.
-  Environment secrets can be scoped so only jobs targeting that
-  environment can read them, and can require manual approval before
-  release if needed later (useful once this graduates to a `production`
-  environment).
+- All secrets (`VERCEL_TOKEN`, or `STAGING_DEPLOY_API_KEY`/`STAGING_HOST`
+  for a non-Vercel target) live in **GitHub Environment or repository
+  secrets**, not the workflow file or code. Environment secrets can be
+  scoped so only jobs targeting that environment can read them, and can
+  require manual approval before release if needed later (useful once
+  this graduates to a `production` environment).
 - Secrets are referenced only via `${{ secrets.NAME }}` and injected as
   job-scoped environment variables at run time — never printed, never
   echoed, never written to a log line. GitHub automatically redacts

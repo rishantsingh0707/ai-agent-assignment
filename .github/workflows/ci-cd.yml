@@ -35,12 +35,6 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,11 +48,12 @@ jobs:
         run: npm ci
 
       - name: Build staging status page
-        # Real deploy target for this assignment: GitHub Pages, used here as
-        # the "staging environment" so the pipeline is fully self-contained
-        # and verifiable with zero external accounts/secrets. In a real
-        # production setup this step would instead push to the actual
-        # staging host (Vercel/ECS/etc.) using the secrets described in
+        # Real deploy target for this assignment: Vercel, used here as the
+        # "staging environment." Deploys a small static status page so the
+        # pipeline is fully self-contained and verifiable with just one
+        # secret (VERCEL_TOKEN). In a real production setup this step would
+        # instead deploy the actual application build to the real staging
+        # host, using the same secrets-handling approach described in
         # part3-cicd/README.md.
         run: |
           mkdir -p _site
@@ -67,7 +62,7 @@ jobs:
           <html>
           <head><title>Staging - AI Agent Assignment</title></head>
           <body style="font-family: monospace; background:#0d1117; color:#c9d1d9; padding:2rem;">
-            <h1>✅ Staging deploy successful</h1>
+            <h1>Staging deploy successful</h1>
             <p>Commit: ${{ github.sha }}</p>
             <p>Deployed at: $(date -u)</p>
             <p>Branch: ${{ github.ref_name }}</p>
@@ -75,15 +70,16 @@ jobs:
           </html>
           EOF
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Vercel
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npm install -g vercel
+          url=$(vercel deploy _site --prod --token="$VERCEL_TOKEN" --yes)
+          echo "Deployed to: $url"
+          echo "page_url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Post-deploy smoke test
         run: |
-          curl -f "${{ steps.deployment.outputs.page_url }}" || (echo "Smoke test failed" && exit 1)
+          curl -f "${{ steps.deploy.outputs.page_url }}" || (echo "Smoke test failed" && exit 1)
